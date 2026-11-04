@@ -91,6 +91,32 @@ class Program
         Console.WriteLine($"Status updated to {customerAccount.AccountStatus}.");
     }
 
+    private static void RemoveAccountFromCustomer(BankContext context)
+    {
+        Console.WriteLine("\n--- Remove Account From Customer ---");
+        var accountNumber = ReadRequired("Account number: ");
+        var customerId = ReadInt("Customer ID: ");
+        var link = context.CustomerAccounts.Find(accountNumber, customerId);
+        if (link is null)
+        {
+            Console.WriteLine("The customer-account ownership link was not found.");
+            return;
+        }
+
+        var isLastOwner = context.CustomerAccounts.Count(item => item.AccountNumber == accountNumber) == 1;
+        context.CustomerAccounts.Remove(link);
+        if (isLastOwner)
+        {
+            var account = context.Accounts.Find(accountNumber);
+            if (account is not null) context.Accounts.Remove(account);
+        }
+
+        context.SaveChanges();
+        Console.WriteLine(isLastOwner
+            ? $"Ownership link deleted; account '{accountNumber}' was also removed because it had no owners."
+            : "Ownership link deleted.");
+    }
+
     private static string ReadRequired(string prompt)
     {
         while (true)
