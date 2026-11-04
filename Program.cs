@@ -1,9 +1,237 @@
-﻿namespace G_NET_84_EF04;
+﻿using Microsoft.EntityFrameworkCore;
+
+namespace G_NET_84_EF04;
 
 class Program
 {
     static void Main(string[] args)
     {
-        Console.WriteLine("Hello, World!");
+        using var context = CreateContext();
+        context.Database.Migrate();
+        RunMenu(context);
+    }
+
+    private static BankContext CreateContext()
+    {
+        const string defaultConnectionString = "Server=(localdb)\\MSSQLLocalDB;Database=NationalBank;Trusted_Connection=True;TrustServerCertificate=True;";
+        var connectionString = Environment.GetEnvironmentVariable("NATIONAL_BANK_CONNECTION") ?? defaultConnectionString;
+        return new BankContext(new DbContextOptionsBuilder<BankContext>().UseSqlServer(connectionString).Options);
+    }
+
+    private static void RunMenu(BankContext context)
+    {
+        while (true)
+        {
+            Console.WriteLine("\n====================================");
+            Console.WriteLine("       National Bank - Management");
+            Console.WriteLine("====================================");
+            Console.WriteLine("1) Add a new Customer");
+            Console.WriteLine("2) Open a new Account for a Customer");
+            Console.WriteLine("3) Update Account Status (Active / Closed)");
+            Console.WriteLine("4) Remove an Account from a Customer");
+            Console.WriteLine("5) List all Customers (with accounts)");
+            Console.WriteLine("0) Exit");
+
+            var choice = ReadChoice("Enter choice: ", 0, 1, 2, 3, 4, 5);
+            if (choice == 0) break;
+
+            try
+            {
+                switch (choice)
+                {
+                    case 1: AddCustomer(context); break;
+                    case 2: OpenAccount(context); break;
+                    case 3: UpdateAccountStatus(context); break;
+                    case 4: RemoveAccountFromCustomer(context); break;
+                    case 5: ListCustomersWithAccounts(context); break;
+                }
+            }
+            catch (DbUpdateException exception)
+            {
+                Console.WriteLine($"The operation could not be saved: {exception.InnerException?.Message ?? exception.Message}");
+            }
+            catch (Exception exception)
+            {
+                Console.WriteLine($"The operation failed: {exception.Message}");
+            }
+
+            Console.WriteLine("Press any key to return to the menu...");
+            Console.ReadKey(intercept: true);
+            Console.WriteLine();
+        }
+    }
+
+    private static void AddCustomer(BankContext context)
+    {
+        Console.WriteLine("\n--- Add New Customer ---");
+        var fullName = ReadRequired("Full name: ");
+        var nationalId = ReadRequired("National ID: ");
+        if (context.Customers.Any(customer => customer.NationalId == nationalId))
+        {
+            Console.WriteLine("A customer with this national ID already exists.");
+            return;
+        }
+
+        var dateOfBirth = ReadDate("Date of birth (yyyy-MM-dd): ");
+        var email = ReadRequired("Email: ");
+        var phoneNumber = ReadRequired("Phone: ");
+        var address = ReadRequired("Address: ");
+        var type = ReadChoice("1) Individual\n2) Business\nChoice: ", 1, 2) == 1
+            ? CustomerType.Individual : CustomerType.Business;
+
+        var customer = new Customer { FullName = fullName, NationalId = nationalId, DateOfBirth = dateOfBirth, Email = email, PhoneNumber = phoneNumber, Address = address, CustomerType = type };
+        context.Customers.Add(customer);
+        context.SaveChanges();
+        Console.WriteLine($"Customer created successfully. CustomerId = {customer.Id}");
+    }
+
+    private static void OpenAccount(BankContext context)
+    {
+        Console.WriteLine("\n--- Open New Account ---");
+        var accountNumber = ReadRequired("Account number: ");
+        if (context.Accounts.Find(accountNumber) is not null)
+        {
+            Console.WriteLine("An account with this number already exists.");
+            return;
+        }
+
+        var accountType = ReadChoice("1) Savings\n2) Current\n3) Business\nChoice: ", 1, 2, 3) switch
+        {
+            1 => AccountType.Savings,
+            2 => AccountType.Current,
+            _ => AccountType.Business
+        };
+        var branchCode = ReadRequired("Branch code: ");
+        var customerId = ReadInt("Customer ID: ");
+        var ownership = ReadChoice("1) Primary\n2) CoHolder\nChoice: ", 1, 2) == 1
+            ? OwnershipType.Primary : OwnershipType.CoHolder;
+
+        if (context.Branches.Find(branchCode) is null)
+        {
+            Console.WriteLine($"Branch '{branchCode}' does not exist.");
+            return;
+        }
+
+        if (context.Customers.Find(customerId) is null)
+        {
+            Console.WriteLine($"Customer {customerId} does not exist.");
+            return;
+        }
+
+        context.Accounts.Add(new Account { AccountNumber = accountNumber, AccountType = accountType, BranchCode = branchCode, OpeningDate = DateTime.UtcNow, CurrentBalance = 0m });
+        context.CustomerAccounts.Add(new CustomerAccount { AccountNumber = accountNumber, CustomerId = customerId, OwnershipType = ownership, OwnershipStartDate = DateTime.UtcNow, AccountStatus = AccountStatus.Active });
+        context.SaveChanges();
+        Console.WriteLine($"Account '{accountNumber}' created and linked to customer {customerId}.");
+    }
+
+    private static void UpdateAccountStatus(BankContext context)
+    {
+        Console.WriteLine("\n--- Update Account Status ---");
+        var accountNumber = ReadRequired("Account number: ");
+        var customerId = ReadInt("Customer ID: ");
+        var customerAccount = context.CustomerAccounts.Find(accountNumber, customerId);
+        if (customerAccount is null)
+        {
+            Console.WriteLine("The customer-account ownership link was not found.");
+            return;
+        }
+
+        customerAccount.AccountStatus = customerAccount.AccountStatus == AccountStatus.Active
+            ? AccountStatus.Closed : AccountStatus.Active;
+        context.SaveChanges();
+        Console.WriteLine($"Status updated to {customerAccount.AccountStatus}.");
+    }
+
+    private static void RemoveAccountFromCustomer(BankContext context)
+    {
+        Console.WriteLine("\n--- Remove Account From Customer ---");
+        var accountNumber = ReadRequired("Account number: ");
+        var customerId = ReadInt("Customer ID: ");
+        var link = context.CustomerAccounts.Find(accountNumber, customerId);
+        if (link is null)
+        {
+            Console.WriteLine("The customer-account ownership link was not found.");
+            return;
+        }
+
+        var isLastOwner = context.CustomerAccounts.Count(item => item.AccountNumber == accountNumber) == 1;
+        context.CustomerAccounts.Remove(link);
+        if (isLastOwner)
+        {
+            var account = context.Accounts.Find(accountNumber);
+            if (account is not null) context.Accounts.Remove(account);
+        }
+
+        context.SaveChanges();
+        Console.WriteLine(isLastOwner
+            ? $"Ownership link deleted; account '{accountNumber}' was also removed because it had no owners."
+            : "Ownership link deleted.");
+    }
+
+    private static void ListCustomersWithAccounts(BankContext context)
+    {
+        Console.WriteLine("\n--- All Customers ---");
+        var customers = context.Customers
+            .Include(customer => customer.CustomerAccounts)
+                .ThenInclude(link => link.Account)
+                    .ThenInclude(account => account.Branch)
+            .OrderBy(customer => customer.Id)
+            .ToList();
+
+        foreach (var customer in customers)
+        {
+            Console.WriteLine($"#{customer.Id} {customer.FullName} ({customer.CustomerType}) | {customer.Email} | {customer.Address}");
+            if (customer.CustomerAccounts.Count == 0)
+            {
+                Console.WriteLine("    (no accounts)");
+                continue;
+            }
+
+            foreach (var link in customer.CustomerAccounts)
+            {
+                Console.WriteLine($"    {link.AccountNumber} | Balance: {link.Account.CurrentBalance:C} | {link.OwnershipType} {link.AccountStatus} | {link.Account.Branch.Name}");
+            }
+        }
+    }
+
+    private static string ReadRequired(string prompt)
+    {
+        while (true)
+        {
+            Console.Write(prompt);
+            var value = Console.ReadLine()?.Trim();
+            if (!string.IsNullOrWhiteSpace(value)) return value;
+            Console.WriteLine("Value is required. Please try again.");
+        }
+    }
+
+    private static DateTime ReadDate(string prompt)
+    {
+        while (true)
+        {
+            Console.Write(prompt);
+            if (DateTime.TryParse(Console.ReadLine(), out var result)) return result;
+            Console.WriteLine("Invalid date. Please use a valid date such as 2000-01-25.");
+        }
+    }
+
+    private static int ReadChoice(string prompt, params int[] validChoices)
+    {
+        while (true)
+        {
+            Console.Write(prompt);
+            if (int.TryParse(Console.ReadLine(), out var choice) && validChoices.Contains(choice)) return choice;
+            Console.WriteLine("Invalid choice. Please try again.");
+        }
+    }
+
+    private static int ReadInt(string prompt)
+    {
+        while (true)
+        {
+            Console.Write(prompt);
+            if (int.TryParse(Console.ReadLine(), out var value)) return value;
+            Console.WriteLine("Invalid number. Please try again.");
+        }
     }
 }
