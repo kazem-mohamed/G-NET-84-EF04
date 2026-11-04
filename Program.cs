@@ -117,6 +117,32 @@ class Program
             : "Ownership link deleted.");
     }
 
+    private static void ListCustomersWithAccounts(BankContext context)
+    {
+        Console.WriteLine("\n--- All Customers ---");
+        var customers = context.Customers
+            .Include(customer => customer.CustomerAccounts)
+                .ThenInclude(link => link.Account)
+                    .ThenInclude(account => account.Branch)
+            .OrderBy(customer => customer.Id)
+            .ToList();
+
+        foreach (var customer in customers)
+        {
+            Console.WriteLine($"#{customer.Id} {customer.FullName} ({customer.CustomerType}) | {customer.Email} | {customer.Address}");
+            if (customer.CustomerAccounts.Count == 0)
+            {
+                Console.WriteLine("    (no accounts)");
+                continue;
+            }
+
+            foreach (var link in customer.CustomerAccounts)
+            {
+                Console.WriteLine($"    {link.AccountNumber} | Balance: {link.Account.CurrentBalance:C} | {link.OwnershipType} {link.AccountStatus} | {link.Account.Branch.Name}");
+            }
+        }
+    }
+
     private static string ReadRequired(string prompt)
     {
         while (true)
