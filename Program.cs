@@ -73,6 +73,24 @@ class Program
         Console.WriteLine($"Account '{accountNumber}' created and linked to customer {customerId}.");
     }
 
+    private static void UpdateAccountStatus(BankContext context)
+    {
+        Console.WriteLine("\n--- Update Account Status ---");
+        var accountNumber = ReadRequired("Account number: ");
+        var customerId = ReadInt("Customer ID: ");
+        var customerAccount = context.CustomerAccounts.Find(accountNumber, customerId);
+        if (customerAccount is null)
+        {
+            Console.WriteLine("The customer-account ownership link was not found.");
+            return;
+        }
+
+        customerAccount.AccountStatus = customerAccount.AccountStatus == AccountStatus.Active
+            ? AccountStatus.Closed : AccountStatus.Active;
+        context.SaveChanges();
+        Console.WriteLine($"Status updated to {customerAccount.AccountStatus}.");
+    }
+
     private static string ReadRequired(string prompt)
     {
         while (true)
