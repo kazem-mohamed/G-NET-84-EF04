@@ -6,8 +6,59 @@ class Program
 {
     static void Main(string[] args)
     {
-        Console.WriteLine("National Bank Management System");
-        
+        using var context = CreateContext();
+        context.Database.Migrate();
+        RunMenu(context);
+    }
+
+    private static BankContext CreateContext()
+    {
+        const string defaultConnectionString = "Server=(localdb)\\MSSQLLocalDB;Database=NationalBank;Trusted_Connection=True;TrustServerCertificate=True;";
+        var connectionString = Environment.GetEnvironmentVariable("NATIONAL_BANK_CONNECTION") ?? defaultConnectionString;
+        return new BankContext(new DbContextOptionsBuilder<BankContext>().UseSqlServer(connectionString).Options);
+    }
+
+    private static void RunMenu(BankContext context)
+    {
+        while (true)
+        {
+            Console.WriteLine("\n====================================");
+            Console.WriteLine("       National Bank - Management");
+            Console.WriteLine("====================================");
+            Console.WriteLine("1) Add a new Customer");
+            Console.WriteLine("2) Open a new Account for a Customer");
+            Console.WriteLine("3) Update Account Status (Active / Closed)");
+            Console.WriteLine("4) Remove an Account from a Customer");
+            Console.WriteLine("5) List all Customers (with accounts)");
+            Console.WriteLine("0) Exit");
+
+            var choice = ReadChoice("Enter choice: ", 0, 1, 2, 3, 4, 5);
+            if (choice == 0) break;
+
+            try
+            {
+                switch (choice)
+                {
+                    case 1: AddCustomer(context); break;
+                    case 2: OpenAccount(context); break;
+                    case 3: UpdateAccountStatus(context); break;
+                    case 4: RemoveAccountFromCustomer(context); break;
+                    case 5: ListCustomersWithAccounts(context); break;
+                }
+            }
+            catch (DbUpdateException exception)
+            {
+                Console.WriteLine($"The operation could not be saved: {exception.InnerException?.Message ?? exception.Message}");
+            }
+            catch (Exception exception)
+            {
+                Console.WriteLine($"The operation failed: {exception.Message}");
+            }
+
+            Console.WriteLine("Press any key to return to the menu...");
+            Console.ReadKey(intercept: true);
+            Console.WriteLine();
+        }
     }
 
     private static void AddCustomer(BankContext context)
