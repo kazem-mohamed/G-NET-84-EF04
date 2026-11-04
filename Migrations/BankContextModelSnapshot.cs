@@ -110,6 +110,22 @@ namespace G_NET_84_EF04.Migrations
                     b.HasKey("Code");
 
                     b.ToTable("Branches");
+
+                    b.HasData(
+                        new
+                        {
+                            Code = "CAI-01",
+                            Address = "Nile Street, Cairo",
+                            Name = "Cairo Main Branch",
+                            PhoneNumber = "01000000001"
+                        },
+                        new
+                        {
+                            Code = "ALX-01",
+                            Address = "Corniche Road, Alexandria",
+                            Name = "Alexandria Branch",
+                            PhoneNumber = "01000000002"
+                        });
                 });
 
             modelBuilder.Entity("G_NET_84_EF04.Customer", b =>
@@ -227,6 +243,26 @@ namespace G_NET_84_EF04.Migrations
                         .IsUnique();
 
                     b.ToTable("Managers");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            BranchCode = "CAI-01",
+                            Email = "mona.manager@bank.example",
+                            FullName = "Mona Ahmed",
+                            HireDate = new DateTime(2020, 1, 15, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            PhoneNumber = "01111111111"
+                        },
+                        new
+                        {
+                            Id = 2,
+                            BranchCode = "ALX-01",
+                            Email = "manager@bank.example",
+                            FullName = "Nile Trading Manager",
+                            HireDate = new DateTime(2021, 6, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            PhoneNumber = "01222222222"
+                        });
                 });
 
             modelBuilder.Entity("G_NET_84_EF04.Account", b =>
